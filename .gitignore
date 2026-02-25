@@ -1,43 +1,8 @@
-cat > .gitignore << 'EOF'
-# Python
+.env
 venv/
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-
-# Environment variables (SECRETS - NEVER COMMIT!)
-.env
-.env.local
-.env.*.local
-
-# Verilog build artifacts
 *.vvp
 *.vcd
 *.out
-*.log
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Node.js (for frontend later)
 node_modules/
-build/
-dist/
-.cache/
-
-# OS files
-.DS_Store
-Thumbs.db
-*.tmp
-
-# Test outputs
-test.out
-waves.vcd
-EOF

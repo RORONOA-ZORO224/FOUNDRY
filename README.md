@@ -23,4 +23,4 @@ User → Frontend → GenAI → Validator → Results
 
 ## Quick Start
 See SETUP.md for installation instructions.
-EOF
+

@@ -1,4 +1,4 @@
-# 🔌 Foundry — AI-Powered Verilog Design Platform
+#  FOUNDRY — AI-Powered Verilog Design Platform
 
 **Hackathon Project:** Natural Language → Working Verilog in 10 seconds
 

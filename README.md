@@ -19,9 +19,10 @@ User → Frontend → GenAI → Validator → Results
 
 ## Current Status
 - ✅ Day 1: Validator service + 15 Verilog templates
-- ⏳ Day 2: GenAI integration 
-- $$ Day 3: Scable frontend and testing 
- 
+<<<<<<< HEAD
+
+
+>>>>>>> Kirinath---CSEguy_2
 ## Quick Start
 See SETUP.md for installation instructions.
 

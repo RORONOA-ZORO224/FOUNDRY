@@ -5,6 +5,10 @@ from testbench_generator import TestbenchGenerator
 from error_fixer import ErrorFixer
 import requests
 from config import Config
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 app = Flask(__name__)
 CORS(app)
@@ -15,12 +19,7 @@ error_fixer = ErrorFixer()
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({
-        "status": "ok",
-        "service": "genai",
-        "model": Config.MODEL_NAME,
-        "validator": Config.VALIDATOR_URL
-    })
+    return jsonify({"status": "ok", "service": "genai"})
 
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -35,7 +34,6 @@ def generate():
     print(f"📝 NEW REQUEST: {description}")
     print(f"{'='*60}\n")
     
-    # Step 1: Generate initial Verilog
     print("🤖 Generating Verilog...")
     result = verilog_gen.generate(description)
     
@@ -48,12 +46,10 @@ def generate():
     
     print(f"✅ Generated module: {module_name}\n")
     
-    # Step 2: Generate testbench
     print("🧪 Generating testbench...")
     testbench_code = testbench_gen.generate(verilog_code, module_name)
     print("✅ Testbench ready\n")
     
-    # Step 3: Validation loop with auto-fix
     validation = None
     simulation = None
     fix_history = []
@@ -62,7 +58,6 @@ def generate():
     while attempt <= Config.MAX_FIX_ATTEMPTS:
         attempt += 1
         
-        # Validate
         print(f"🔍 Validation attempt {attempt}...")
         try:
             validation_response = requests.post(
@@ -80,7 +75,6 @@ def generate():
             print(f"✅ Validation passed!\n")
             break
         else:
-            # Validation failed
             errors = validation.get('errors', ['Unknown error'])
             print(f"❌ Validation failed:")
             for err in errors:
@@ -90,22 +84,17 @@ def generate():
                 print(f"⚠️  Max attempts reached\n")
                 break
             
-            # Try to fix
             print(f"🔧 Attempting auto-fix (attempt {attempt})...")
             fix_result = error_fixer.fix(verilog_code, errors, module_name, attempt)
             
             if fix_result['success']:
                 fixed_code = fix_result['fixed_code']
                 print(f"✅ Fix generated\n")
-                
-                # Record the fix
                 fix_history.append({
                     'attempt': attempt,
                     'original_errors': errors,
                     'fixed': True
                 })
-                
-                # Use the fixed code for next iteration
                 verilog_code = fixed_code
             else:
                 print(f"❌ Fix generation failed: {fix_result.get('error')}\n")
@@ -117,7 +106,6 @@ def generate():
                 })
                 break
     
-    # Step 4: Simulate if validation passed
     if validation and validation.get('success'):
         print("🧪 Running simulation...")
         try:
@@ -140,7 +128,6 @@ def generate():
             simulation = {'success': False, 'error': f'Simulation error: {str(e)}'}
             print(f"❌ Simulation error: {e}\n")
     
-    # Return complete result
     return jsonify({
         'success': True,
         'verilog_code': verilog_code,
@@ -149,16 +136,88 @@ def generate():
         'explanation': explanation,
         'validation': validation,
         'simulation': simulation,
-        'fix_history': fix_history,  # NEW: Show what was fixed
-        'auto_fixed': len(fix_history) > 0  # NEW: Flag if auto-fix was used
+        'fix_history': fix_history,
+        'auto_fixed': len(fix_history) > 0
     })
+
+@app.route('/schematic', methods=['POST'])
+def generate_schematic():
+    """Generate schematic data from Verilog."""
+    print(f"\n🔷 SCHEMATIC REQUEST")
+    try:
+        from schematic.verilog_parser import VerilogParser
+        
+        data = request.json
+        verilog_code = data.get('verilog_code', '')
+        
+        if not verilog_code:
+            return jsonify({'success': False, 'error': 'No code provided'}), 400
+        
+        parser = VerilogParser()
+        schematic = parser.parse(verilog_code)
+        print(f"✅ Schematic: {len(schematic['nodes'])} nodes, {len(schematic['edges'])} edges\n")
+        
+        return jsonify({'success': True, 'schematic': schematic})
+    except Exception as e:
+        print(f"❌ Schematic failed: {e}\n")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/fpga', methods=['POST'])
+def analyze_fpga():
+    """Analyze FPGA resource usage."""
+    print(f"\n📊 FPGA ANALYSIS REQUEST")
+    try:
+        from fpga.estimator import FPGAEstimator
+        
+        data = request.json
+        verilog_code = data.get('verilog_code', '')
+        
+        if not verilog_code:
+            return jsonify({'success': False, 'error': 'No code provided'}), 400
+        
+        estimator = FPGAEstimator()
+        analysis = estimator.estimate(verilog_code)
+        print(f"✅ FPGA: {analysis['luts']} LUTs, {analysis['ffs']} FFs, fits {len(analysis['fits'])} devices\n")
+        
+        return jsonify({'success': True, 'analysis': analysis})
+    except Exception as e:
+        print(f"❌ FPGA analysis failed: {e}\n")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/learning', methods=['POST'])
+def learning_mode():
+    """Generate line-by-line explanations."""
+    print(f"\n🎓 LEARNING MODE REQUEST")
+    try:
+        from learning.explainer import LearningExplainer
+        
+        data = request.json
+        verilog_code = data.get('verilog_code', '')
+        
+        if not verilog_code:
+            return jsonify({'success': False, 'error': 'No code provided'}), 400
+        
+        explainer = LearningExplainer()
+        explanations = explainer.explain(verilog_code)
+        print(f"✅ Learning: {len(explanations)} line explanations\n")
+        
+        return jsonify({'success': True, 'explanations': explanations})
+    except Exception as e:
+        print(f"❌ Learning mode failed: {e}\n")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🚀 GenAI Service with Auto-Fix Starting")
-    print(f"📡 Listening on: http://0.0.0.0:5000")
+    print("🚀 GenAI Service Starting")
+    print(f"📡 Port: 5000")
     print(f"🤖 Model: {Config.MODEL_NAME}")
     print(f"🔗 Validator: {Config.VALIDATOR_URL}")
-    print(f"🔧 Auto-fix: Enabled (max {Config.MAX_FIX_ATTEMPTS} attempts)")
+    print("=" * 60)
+    print("\nRegistered routes:")
+    print("  GET  /health")
+    print("  POST /generate")
+    print("  POST /schematic")
+    print("  POST /fpga")
+    print("  POST /learning")
     print("=" * 60)
     app.run(host='0.0.0.0', port=5000, debug=True)

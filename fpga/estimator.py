@@ -1,7 +1,7 @@
 import re
 
 class FPGAEstimator:
-    """Estimate FPGA resources - simple version."""
+    """Estimate FPGA resource usage."""
     
     FPGA_FAMILIES = {
         'iCE40-HX1K': {'LUTs': 1280, 'FFs': 1280, 'BRAMs': 16, 'DSPs': 0},
@@ -14,71 +14,69 @@ class FPGAEstimator:
     
     def estimate(self, verilog_code):
         """Estimate resource usage."""
-        try:
-            luts = 10  # Base
-            ffs = 10   # Base
-            brams = 0
-            dsps = 0
-            
-            # Count lines of actual code
-            lines = [l for l in verilog_code.split('\n') if l.strip() and not l.strip().startswith('//')]
-            luts += len(lines) * 2
-            
-            # Count registers
-            regs = len(re.findall(r'\breg\b', verilog_code))
-            ffs += regs * 8
-            
-            # Count always blocks
-            always = len(re.findall(r'\balways\b', verilog_code))
-            luts += always * 10
-            
-            # Count operations
-            luts += len(re.findall(r'[+\-&|^]', verilog_code)) * 2
-            
-            # Count multiplications
-            mult = len(re.findall(r'\*', verilog_code))
-            if mult > 0:
-                dsps = mult
-                luts += mult * 5
-            
-            # Ensure minimum values
-            luts = max(50, luts)
-            ffs = max(30, ffs)
-            
-            # Find compatible FPGAs
-            fits = []
-            for fpga, resources in self.FPGA_FAMILIES.items():
-                if (luts <= resources['LUTs'] and 
-                    ffs <= resources['FFs'] and
-                    brams <= resources['BRAMs'] and
-                    dsps <= resources['DSPs']):
-                    
-                    util = max(
-                        (luts / resources['LUTs']) * 100,
-                        (ffs / resources['FFs']) * 100
-                    )
-                    
-                    fits.append({
-                        'fpga': fpga,
-                        'utilization': round(util, 1)
-                    })
-            
-            # Sort by utilization
-            fits.sort(key=lambda x: x['utilization'])
-            
-            return {
-                'luts': luts,
-                'ffs': ffs,
-                'brams': brams,
-                'dsps': dsps,
-                'fits': fits
-            }
-        except Exception as e:
-            print(f"FPGA estimation error: {e}")
-            return {
-                'luts': 100,
-                'ffs': 50,
-                'brams': 0,
-                'dsps': 0,
-                'fits': []
-            }
+        luts = 0
+        ffs = 0
+        brams = 0
+        dsps = 0
+        
+        # Count registers
+        regs = re.findall(r'reg\s+(?:\[\d+:\d+\]\s+)?(\w+)', verilog_code)
+        ffs += len(regs) * 8
+        
+        # Count logic
+        assigns = len(re.findall(r'assign\s+', verilog_code))
+        luts += assigns * 2
+        
+        always_blocks = len(re.findall(r'always\s*@', verilog_code))
+        luts += always_blocks * 5
+        
+        # Count operators
+        ops = {
+            r'\+': 1.5, r'-': 1.5, r'\*': 14, r'/': 20, r'%': 15,
+            r'&': 0.5, r'\|': 0.5, r'\^': 0.5,
+            r'<<': 1, r'>>': 1,
+            r'==': 2, r'!=': 2, r'<': 2, r'>': 2
+        }
+        
+        for op, cost in ops.items():
+            count = len(re.findall(op, verilog_code))
+            if op == r'\*':
+                dsps += count
+            else:
+                luts += int(count * cost)
+        
+        # Count memory
+        memories = re.findall(r'reg\s+\[(\d+):(\d+)\]\s+\w+\s*\[(\d+):(\d+)\]', verilog_code)
+        for mem in memories:
+            width = int(mem[0]) - int(mem[1]) + 1
+            depth = int(mem[2]) - int(mem[3]) + 1
+            total_bits = width * depth
+            if total_bits > 512:
+                brams += (total_bits + 18000 - 1) // 18000
+        
+        luts = max(1, int(luts))
+        ffs = max(1, int(ffs))
+        
+        # Check which FPGAs fit
+        fits = []
+        for fpga, resources in self.FPGA_FAMILIES.items():
+            if (luts <= resources['LUTs'] and 
+                ffs <= resources['FFs'] and
+                brams <= resources['BRAMs'] and
+                dsps <= resources['DSPs']):
+                utilization = max(
+                    luts / resources['LUTs'],
+                    ffs / resources['FFs']
+                ) * 100
+                fits.append({
+                    'fpga': fpga,
+                    'utilization': round(utilization, 1)
+                })
+        
+        return {
+            'luts': luts,
+            'ffs': ffs,
+            'brams': brams,
+            'dsps': dsps,
+            'fits': sorted(fits, key=lambda x: x['utilization'])
+        }

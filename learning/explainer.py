@@ -1,74 +1,65 @@
-import re
+from groq import Groq
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'genai'))
+from config import Config
+import json
 
 class LearningExplainer:
-    """Generate line-by-line explanations - simple version."""
+    """Generate line-by-line explanations."""
+    
+    def __init__(self):
+        self.client = Groq(api_key=Config.GROQ_API_KEY)
     
     def explain(self, verilog_code):
         """Generate explanations for each line."""
+        
+        lines = verilog_code.strip().split('\n')
+        
+        prompt = f"""Explain this Verilog code line by line for a student.
+
+CODE:
+{verilog_code}
+
+Return a JSON array with this format:
+[
+  {{"line": 1, "code": "module ...", "explanation": "This declares a module named...", "category": "declaration"}},
+  {{"line": 2, "code": "input ...", "explanation": "This is an input port...", "category": "port"}},
+  ...
+]
+
+Categories: declaration, port, logic, sequential, combinational, structural
+
+Provide clear, educational explanations. Return ONLY the JSON array, no other text."""
+        
         try:
-            explanations = []
-            lines = verilog_code.split('\n')
+            response = self.client.chat.completions.create(
+                model=Config.MODEL_NAME,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=3000,
+                temperature=0.3
+            )
             
-            for i, line in enumerate(lines, 1):
-                stripped = line.strip()
-                if not stripped or stripped.startswith('//'):
-                    continue
-                
-                # Determine category and explanation
-                category = 'logic'
-                explanation = 'Verilog code line'
-                
-                if 'module' in stripped:
-                    category = 'declaration'
-                    explanation = 'Module declaration - defines the hardware block name and interface'
-                elif 'input' in stripped:
-                    category = 'port'
-                    explanation = 'Input port - data coming into the module'
-                elif 'output' in stripped:
-                    category = 'port'
-                    explanation = 'Output port - data going out of the module'
-                elif 'reg' in stripped:
-                    category = 'declaration'
-                    explanation = 'Register declaration - storage element that holds state'
-                elif 'wire' in stripped:
-                    category = 'declaration'
-                    explanation = 'Wire declaration - combinational connection between logic'
-                elif 'always @(posedge' in stripped or 'always @(negedge' in stripped:
-                    category = 'sequential'
-                    explanation = 'Sequential logic block - triggered on clock edge, implements flip-flops'
-                elif 'always @' in stripped:
-                    category = 'combinational'
-                    explanation = 'Combinational logic block - output changes immediately with inputs'
-                elif 'assign' in stripped:
-                    category = 'combinational'
-                    explanation = 'Continuous assignment - combinational logic statement'
-                elif 'case' in stripped:
-                    category = 'logic'
-                    explanation = 'Case statement - multiplexer logic for selecting between options'
-                elif 'if' in stripped:
-                    category = 'logic'
-                    explanation = 'Conditional statement - creates multiplexer logic'
-                elif 'endmodule' in stripped:
-                    category = 'declaration'
-                    explanation = 'End of module declaration'
-                
-                explanations.append({
-                    'line': i,
-                    'code': line,
-                    'explanation': explanation,
-                    'category': category
-                })
+            content = response.choices[0].message.content
             
+            # Try to extract JSON
+            if '```json' in content:
+                content = content.split('```json')[1].split('```')[0]
+            elif '```' in content:
+                content = content.split('```')[1].split('```')[0]
+            
+            explanations = json.loads(content.strip())
             return explanations
             
         except Exception as e:
-            print(f"Learning explanation error: {e}")
-            # Return minimal fallback
+            print(f"❌ Learning explanation failed: {e}")
+            # Fallback: simple line-by-line
             return [
                 {
-                    'line': 1,
-                    'code': verilog_code.split('\n')[0] if verilog_code else '',
+                    'line': i + 1,
+                    'code': line,
                     'explanation': 'Code explanation unavailable',
                     'category': 'logic'
                 }
+                for i, line in enumerate(lines) if line.strip()
             ]

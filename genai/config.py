@@ -34,3 +34,5 @@ class Config:
         return True
 
 Config.validate()
+MAX_FIX_ATTEMPTS = 3
+FIX_TEMPERATURE = 0.3

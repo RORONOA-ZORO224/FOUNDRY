@@ -1,0 +1,231 @@
+.waveform-viewer {
+  background: var(--bg-secondary, #13131a);
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+}
+
+.waveform-header {
+  padding: 1rem;
+  background: var(--bg-elevated, #22222e);
+  border-bottom: 1px solid var(--border-color, #2a2a38);
+}
+
+.waveform-info {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.info-item {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary, #9ca3af);
+}
+
+.waveform-container {
+  max-height: 500px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.waveform-row {
+  display: flex;
+  border-bottom: 1px solid var(--border-color, #2a2a38);
+  min-height: 40px;
+  transition: background 0.2s;
+}
+
+.waveform-row:hover {
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.waveform-row.bit-row {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.signal-name-cell {
+  min-width: 180px;
+  max-width: 180px;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Monaco', monospace;
+  font-size: 0.875rem;
+  color: var(--text-primary, #e5e7eb);
+  font-weight: 600;
+  border-right: 1px solid var(--border-color, #2a2a38);
+  background: var(--bg-secondary, #13131a);
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.signal-name-cell.indent {
+  padding-left: 2.5rem;
+  background: var(--bg-elevated, #22222e);
+}
+
+.expand-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-color, #2a2a38);
+  border-radius: 4px;
+  color: var(--text-secondary, #9ca3af);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.expand-btn:hover {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: var(--primary, #667eea);
+}
+
+.expand-btn.expanded {
+  transform: rotate(90deg);
+  background: rgba(102, 126, 234, 0.2);
+}
+
+.signal-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.signal-width {
+  color: var(--text-muted, #6b7280);
+  font-size: 0.75rem;
+}
+
+.signal-wave-cell {
+  flex: 1;
+  min-width: 600px;
+  padding: 0.5rem;
+}
+
+.wave-line {
+  display: flex;
+  height: 30px;
+  border: 1px solid var(--border-light, #3a3a48);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.wave-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s;
+  position: relative;
+  cursor: pointer;
+}
+
+.wave-segment:hover {
+  filter: brightness(1.2);
+  z-index: 5;
+}
+
+.wave-high {
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+}
+
+.wave-low {
+  background: linear-gradient(180deg, #4b5563 0%, #374151 100%);
+}
+
+.wave-data {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.wave-unknown {
+  background: repeating-linear-gradient(
+    45deg,
+    #f59e0b,
+    #f59e0b 4px,
+    #fbbf24 4px,
+    #fbbf24 8px
+  );
+}
+
+.wave-tristate {
+  background: repeating-linear-gradient(
+    45deg,
+    #8b5cf6,
+    #8b5cf6 4px,
+    #a78bfa 4px,
+    #a78bfa 8px
+  );
+}
+
+.wave-value {
+  font-family: 'Monaco', monospace;
+  font-size: 0.7rem;
+  color: white;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.waveform-legend {
+  padding: 1rem;
+  background: var(--bg-elevated, #22222e);
+  border-top: 1px solid var(--border-color, #2a2a38);
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #9ca3af);
+}
+
+.legend-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.legend-dot.high {
+  background: #10b981;
+}
+
+.legend-dot.low {
+  background: #4b5563;
+}
+
+.legend-dot.data {
+  background: #3b82f6;
+}
+
+.legend-dot.unknown {
+  background: repeating-linear-gradient(45deg, #f59e0b, #f59e0b 4px, #fbbf24 4px, #fbbf24 8px);
+}
+
+.legend-dot.tristate {
+  background: repeating-linear-gradient(45deg, #8b5cf6, #8b5cf6 4px, #a78bfa 4px, #a78bfa 8px);
+}
+
+.waveform-empty {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-muted, #6b7280);
+  background: var(--bg-secondary, #13131a);
+  border-radius: var(--radius-md, 12px);
+}

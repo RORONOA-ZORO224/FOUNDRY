@@ -1,154 +1,126 @@
 from groq import Groq
 from config import Config
 import re
-from pathlib import Path
+import html
 
 
 class VerilogGenerator:
+    """
+    Generates Verilog RTL code using Groq LLM.
+    Cleans markdown and HTML artifacts.
+    """
 
     def __init__(self):
-        self.client = Groq(api_key=Config.GROQ_API_KEY)  
-        self.templates = self._load_templates()
+        self.client = Groq(api_key=Config.GROQ_API_KEY)
 
-    def _load_templates(self):
-        templates = []
-        templates_dir = Path(Config.TEMPLATES_DIR)
+    # ==========================================================
+    # MAIN GENERATE FUNCTION
+    # ==========================================================
 
-        if not templates_dir.exists():
-            print(f"Warning: Templates directory not found: {templates_dir}")
-            return []
+    def generate(self, description):
+        """Generate Verilog code from text description."""
 
-        for vfile in templates_dir.glob('*.v'):
-            try:
-                content = vfile.read_text()
-                templates.append({'name': vfile.stem, 'code': content})
-            except Exception as e:
-                print(f"Warning: Could not load {vfile.name}: {e}")
+        prompt = f"""Generate synthesizable Verilog 2005 code.
 
-        print(f"Loaded {len(templates)} template examples")
-        return templates
+DESCRIPTION:
+{description}
 
-    def _build_system_prompt(self):
-        best_practices = """
-You are a professional Verilog hardware designer. Follow these rules strictly.
-
-GENERAL RULES:
-- Output ONLY synthesizable Verilog.
-- No markdown.
-- No explanations outside comments.
-- Proper 4-space indentation.
-- End with endmodule.
-
-SIGNAL DECLARATIONS:
-- Declare all signals explicitly.
-- Use scalar declarations for 1-bit signals (input a; not [0:0]).
-- Always specify bit widths for multi-bit signals.
-
-COMBINATIONAL LOGIC:
-- Prefer continuous assignment (assign) for simple logic expressions.
-- Use always @(*) only when multiple statements or conditional logic is required.
-- Use blocking assignments (=) in combinational always blocks.
-- Always include else branches to avoid latches.
-
-SEQUENTIAL LOGIC:
-- Use always @(posedge clk).
-- Use non-blocking assignments (<=).
-- Include synchronous active-high reset inside the same block.
-- Reset to known values (e.g., counter <= 8'd0;).
-
-NAMING:
-- Modules: lowercase_with_underscores
-- Parameters: UPPERCASE
-- States: UPPERCASE
-
-CASE STATEMENTS:
-- Always include default case.
-"""
-        examples = "\n\nHERE ARE KNOWN-GOOD EXAMPLES TO LEARN FROM:\n\n"
-        for i, template in enumerate(self.templates[:5], 1):
-            examples += f"--- Example {i}: {template['name']} ---\n"
-            examples += template['code']
-            examples += "\n\n"
-
-        return best_practices + examples
-
-    def generate(self, user_description):
-        system_prompt = self._build_system_prompt()
-
-        user_prompt = f"""
-Generate a complete, working Verilog module for this description:
-
-{user_description}
-
-Requirements:
-1. Include complete module with all ports
-2. Follow all Verilog best practices from system prompt
-3. Add brief comments explaining key logic
-4. Module should be synthesizable
-5. Use standard Verilog 2005 (not SystemVerilog)
-
-Output format:
-```verilog
-// Your Verilog code here
-```
-
-Then provide a brief explanation of how the module works.
+STRICT RULES:
+- No SystemVerilog.
+- No explanation.
+- Output ONLY Verilog code.
 """
 
         try:
-            response = self.client.chat.completions.create(  
+            response = self.client.chat.completions.create(
                 model=Config.MODEL_NAME,
-                max_tokens=Config.MAX_TOKENS,
-                temperature=Config.TEMPERATURE,
                 messages=[
-                    {"role": "system", "content": system_prompt}, 
-                    {"role": "user", "content": user_prompt}
-                ]
+                    {
+                        "role": "system",
+                        "content": "You are a professional RTL design engineer.",
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
+                max_tokens=2000,
+                temperature=0.4,
             )
 
-            full_response = response.choices[0].message.content  
-            verilog_code = self._extract_verilog(full_response)
-            module_name = self._extract_module_name(verilog_code)
-            explanation = full_response.split('```')[-1].strip()
+            raw_output = response.choices[0].message.content
+
+            # Extract and clean
+            verilog = self._extract_verilog(raw_output)
+
+            # Extra safety: remove any HTML tags
+            verilog = re.sub(r"<[^>]+>", "", verilog)
+
+            module_name = self._extract_module_name(verilog)
 
             return {
-                'success': True,
-                'verilog_code': verilog_code,
-                'module_name': module_name,
-                'explanation': explanation,
-                'raw_response': full_response
+                "success": True,
+                "verilog_code": verilog,
+                "module_name": module_name,
             }
 
         except Exception as e:
+            print(f"⚠️ Verilog generation failed: {e}")
             return {
-                'success': False,
-                'error': str(e),
-                'verilog_code': None,
-                'module_name': None
+                "success": False,
+                "error": str(e),
             }
 
+    # ==========================================================
+    # CLEAN LLM OUTPUT
+    # ==========================================================
+
     def _extract_verilog(self, text):
-        if '```verilog' in text:
-            code = text.split('```verilog')[1].split('```')[0]
-        elif '```' in text:
-            code = text.split('```')[1].split('```')[0]
+        """Extract clean Verilog code from LLM response."""
+
+        if "```verilog" in text:
+            code = text.split("```verilog")[1].split("```")[0]
+        elif "```v" in text:
+            code = text.split("```v")[1].split("```")[0]
+        elif "```" in text:
+            parts = text.split("```")
+            if len(parts) >= 3:
+                code = parts[1]
+            else:
+                code = text
         else:
             code = text
-        return code.strip()
+
+        code = code.strip()
+        code = html.unescape(code)
+        code = re.sub(r"<[^>]+>", "", code)
+        code = re.sub(r"\n{3,}", "\n\n", code)
+
+        return code
+
+    # ==========================================================
+    # EXTRACT MODULE NAME
+    # ==========================================================
 
     def _extract_module_name(self, verilog_code):
-        match = re.search(r'module\s+(\w+)', verilog_code)
-        return match.group(1) if match else 'top'
+        """Extract module name from Verilog code."""
+        match = re.search(r"module\s+(\w+)", verilog_code)
+        if match:
+            return match.group(1)
+        return "generated_module"
 
+
+# ==========================================================
+# LOCAL TEST
+# ==========================================================
 
 if __name__ == "__main__":
-    print("Testing VerilogGenerator...")
-    gen = VerilogGenerator()
-    result = gen.generate("Create a simple 4-bit adder with carry out")
+    print("🧪 Testing VerilogGenerator...\n")
 
-    if result['success']:
-        print(f"\n✅ Generation successful!")
-        print(f"Module name: {result['module_name']}")
-        print(f"\nGenerated code:\n{result['verilog_code']}\n")
-    else:
-        print(f"\n❌ Generation failed: {result['error']}")
+    gen = VerilogGenerator()
+    result = gen.generate("Create a 4-bit adder with carry in and carry out")
+
+    print("Generated Verilog:")
+    print("=" * 60)
+    print(result.get("verilog_code", "No code generated"))
+    print("=" * 60)

@@ -1,28 +1,53 @@
-#  FOUNDRY — AI-Powered Verilog Design Platform
+# FOUNDRY – AI-Powered Verilog Development Platform
 
-**Hackathon Project:** Natural Language → Working Verilog in 10 seconds
+FOUNDRY is a full-stack AI-assisted Verilog development environment built with:
 
-## Team
-- ECE Guy: Validator + Templates + FPGA Estimation
-- CSE Guy 1: GenAI Service + Claude Integration
-- CSE Guy 2: Testing + Quality Metrics
-- CSE Guy 3: React Frontend
+- GenAI (LLM-based Verilog generation & auto-fix)
+- Validator (Icarus Verilog compilation + simulation)
+- FPGA resource estimation
+- Schematic visualization (Cytoscape)
+-  Learning mode (line-by-line explanations)
+-  React frontend
+-  Fully configured for WSL development
 
-## What We're Building
-AI system that generates, validates, simulates, and visualizes Verilog hardware designs from plain English descriptions.
+---
 
-## Architecture
-```
-User → Frontend → GenAI → Validator → Results
-       (Port 3000) (5000)   (5001)
-```
+#  Features
 
-## Current Status
-- ✅ Day 1: Validator service + 15 Verilog templates
-<<<<<<< HEAD
+## 🔹 1. Verilog Generation
+- Generate synthesizable Verilog from natural language.
+- Uses Groq LLM (LLaMA model).
+- Auto-detects module name.
 
+## 🔹 2. Automatic Error Fixing
+- Validates generated Verilog.
+- If compilation fails → AI attempts automatic fixes.
+- Configurable max fix attempts.
 
->>>>>>> Kirinath---CSEguy_2
-## Quick Start
-See SETUP.md for installation instructions.
+## 🔹 3. Testbench Generation
+- Automatically generates testbench.
+- Runs simulation through Validator
+- also generates Waveform using GTK wave.
+
+## 🔹 4. FPGA Resource Estimation
+- Estimates:
+  - LUT usage
+  - Flip-Flop usage
+  - Device fit suggestions
+
+## 🔹 5. Schematic Viewer
+- Parses Verilog
+- Generates nodes & edges
+- Visualized using:
+  - `cytoscape`
+  - `cytoscape-dagre`
+
+## 🔹 6. Learning Mode
+- Generates line-by-line explanation of Verilog code.
+- Designed for ECE students.
+
+---
+
+FURTHER IMPLEMENTATION:
+want to give more data sets(Verilog examples) to make it more efficient and accurate.
 

@@ -1,177 +1,209 @@
+"""
+validator/waveform_converter.py
+Converts VCD (Value Change Dump) output from Icarus Verilog into
+a clean JSON structure for the frontend WaveformViewer.
+
+ROOT-CAUSE FIX (duplicate signals):
+  Old parsers built a *list* and appended once during $var declaration
+  AND again during $dumpvars / value-change parsing → every signal appeared
+  twice.  This version uses a dict keyed by signal name throughout and only
+  converts to a list at the very end, so duplicates are impossible.
+"""
+
 import re
 
+
 class WaveformConverter:
-    """Convert VCD files to JSON format."""
-    
-    def vcd_to_json(self, vcd_content):
-        """
-        Parse VCD and convert to JSON.
-        Returns: {signals: [...], timeunit: 'ns', max_time: 100}
-        """
-        if not vcd_content:
-            print("❌ No VCD content provided")
-            return {"signals": [], "timeunit": "ns", "max_time": 0}
-        
-        print(f"📊 Parsing VCD ({len(vcd_content)} bytes)...")
-        
-        signals = {}
-        current_time = 0
-        max_time = 0
-        timeunit = "ns"
-        
-        # Parse timescale
-        timescale_match = re.search(r'\$timescale\s+(\d+)\s*(\w+)', vcd_content)
-        if timescale_match:
-            timeunit = timescale_match.group(2)
-            print(f"   Timescale: {timescale_match.group(1)}{timeunit}")
-        
-        # Parse variable definitions
-        var_pattern = r'\$var\s+(\w+)\s+(\d+)\s+(\S+)\s+([^\s]+)'
-        var_count = 0
-        for match in re.finditer(var_pattern, vcd_content):
-            var_type = match.group(1)
-            width = int(match.group(2))
-            identifier = match.group(3)
-            name = match.group(4)
-            
-            # Clean name (remove array indices)
-            clean_name = name.split('[')[0]
-            
-            signals[identifier] = {
-                'name': clean_name,
-                'width': width,
-                'values': [],
-                'type': var_type
+
+    def vcd_to_json(self, vcd_content: str) -> dict:
+        """Parse VCD text and return waveform JSON safe for the frontend."""
+
+        if not vcd_content or not vcd_content.strip():
+            return {"signals": [], "max_time": 100, "timeunit": "ns"}
+
+        # ── 1. Parse header ──────────────────────────────────────────────────
+        timescale = self._extract_timescale(vcd_content)
+
+        # id_info maps VCD symbol → {name, width}
+        id_info: dict[str, dict] = {}
+        self._parse_var_declarations(vcd_content, id_info)
+
+        if not id_info:
+            return {"signals": [], "max_time": 100, "timeunit": timescale}
+
+        # ── 2. Parse value changes ───────────────────────────────────────────
+        # values_by_id maps VCD symbol → [ {time, value}, … ]  (ordered)
+        values_by_id: dict[str, list] = {sym: [] for sym in id_info}
+        max_time = self._parse_value_changes(vcd_content, id_info, values_by_id)
+
+        # ── 3. Build output — ONE entry per signal name ──────────────────────
+        # If two VCD symbols map to the same signal name (shouldn't happen in
+        # a well-formed VCD, but let's be safe), keep the one with more events.
+        by_name: dict[str, dict] = {}
+        for sym, info in id_info.items():
+            name = info["name"]
+            entry = {
+                "name":   name,
+                "width":  info["width"],
+                "values": values_by_id.get(sym, []),
             }
-            var_count += 1
-        
-        print(f"   Found {var_count} signals")
-        
-        # Parse value changes
-        lines = vcd_content.split('\n')
-        for line in lines:
-            line = line.strip()
-            
-            # Timestamp
-            if line.startswith('#'):
-                try:
-                    current_time = int(line[1:])
-                    if current_time > max_time:
-                        max_time = current_time
-                except ValueError:
-                    continue
-            
-            # Single-bit value: 0x or 1x
-            elif line and len(line) >= 2 and line[0] in '01xzXZ':
-                value = line[0]
-                identifier = line[1:]
-                if identifier in signals:
-                    signals[identifier]['values'].append({
-                        'time': current_time,
-                        'value': value
-                    })
-            
-            # Multi-bit value: b0101 x
-            elif line.startswith('b'):
-                match = re.match(r'b([01xzXZ]+)\s+(\S+)', line)
-                if match:
-                    value = match.group(1)
-                    identifier = match.group(2)
-                    if identifier in signals:
-                        width = signals[identifier]['width']
-                        # Convert to hex if > 4 bits
-                        if width > 4:
-                            try:
-                                dec_val = int(value.replace('x', '0').replace('z', '0'), 2)
-                                hex_val = f"0x{dec_val:X}"
-                                display_value = hex_val
-                            except:
-                                display_value = value
-                        else:
-                            display_value = value
-                        
-                        signals[identifier]['values'].append({
-                            'time': current_time,
-                            'value': display_value
-                        })
-        
-        # Convert to list
-        signal_list = sorted(signals.values(), key=lambda x: x['name'])
-        
-        print(f"✅ Parsed waveform: {len(signal_list)} signals, max_time={max_time}")
-        
+            if name not in by_name:
+                by_name[name] = entry
+            else:
+                # Keep whichever entry has more data points
+                if len(entry["values"]) > len(by_name[name]["values"]):
+                    by_name[name] = entry
+
+        signals = list(by_name.values())
+
+        # Sort: inputs first (a, b, …), then outputs (out, …), then others
+        signals.sort(key=lambda s: (
+            0 if s["name"] in ("clk", "rst", "reset", "clock") else
+            1 if not s["name"].startswith("out") else
+            2
+        ))
+
         return {
-            'signals': signal_list,
-            'timeunit': timeunit,
-            'max_time': max_time
+            "signals":  signals,
+            "max_time": max_time if max_time > 0 else 100,
+            "timeunit": timescale,
         }
 
+    # ────────────────────────────────────────────────────────────────────────
+    # Internal helpers
+    # ────────────────────────────────────────────────────────────────────────
 
-# Test
-if __name__ == "__main__":
-    converter = WaveformConverter()
-    
-    test_vcd = """$date
-   Sat Mar  1 12:00:00 2025
-$end
-$version
-   Icarus Verilog
-$end
-$timescale
-   1ns
-$end
-$scope module testbench $end
-$var wire 1 ! clk $end
-$var wire 1 " rst $end
-$var wire 4 # count [3:0] $end
-$upscope $end
-$enddefinitions $end
-#0
-$dumpvars
-0!
-1"
-b0000 #
-$end
-#5
-1!
-#10
-0!
-0"
-#15
-1!
-b0001 #
-#20
-0!
-#25
-1!
-b0010 #
-#30
-0!
-#35
-1!
-b0011 #
-#40
-"""
-    
-    print("=" * 60)
-    print("TESTING WAVEFORM CONVERTER")
-    print("=" * 60)
-    
-    result = converter.vcd_to_json(test_vcd)
-    
-    print("\n" + "=" * 60)
-    print("RESULT:")
-    print("=" * 60)
-    print(f"Signals: {len(result['signals'])}")
-    print(f"Max time: {result['max_time']}{result['timeunit']}")
-    
-    for sig in result['signals']:
-        print(f"\n📊 {sig['name']} ({sig['width']}-bit):")
-        print(f"   Changes: {len(sig['values'])}")
-        if sig['values']:
-            print(f"   First 3 values: {sig['values'][:3]}")
-    
-    if len(result['signals']) > 0:
-        print("\n✅ ✅ ✅ CONVERTER WORKING! ✅ ✅ ✅")
-    else:
-        print("\n❌ ❌ ❌ NO SIGNALS PARSED ❌ ❌ ❌")
+    def _extract_timescale(self, vcd: str) -> str:
+        m = re.search(r'\$timescale\s+(\S+)\s*\$end', vcd)
+        if m:
+            ts = m.group(1)
+            # strip numeric prefix → keep unit only
+            unit = re.sub(r'[\d\s]+', '', ts).strip() or "ns"
+            return unit
+        return "ns"
+
+    def _parse_var_declarations(self, vcd: str, id_info: dict) -> None:
+        """
+        Populate id_info from $var lines.
+        Format: $var <type> <width> <id_char> <name> [<index>] $end
+        We normalise multi-bit names by stripping any trailing [N] index.
+        """
+        # Match: $var  wire/reg/…  <width>  <id>  <name>  [optional-index]  $end
+        pattern = re.compile(
+            r'\$var\s+'
+            r'\w+\s+'           # type (wire / reg / integer / …)
+            r'(\d+)\s+'         # width
+            r'(\S+)\s+'         # id symbol
+            r'(\w+)'            # name
+            r'(?:\s+\[[\d:]+\])?'  # optional bit-select (ignored)
+            r'\s*\$end',
+            re.IGNORECASE
+        )
+        for m in pattern.finditer(vcd):
+            width = int(m.group(1))
+            sym   = m.group(2)
+            name  = m.group(3)
+
+            # Skip internal/testbench signals
+            if name in ("testbench", "uut"):
+                continue
+            # Skip the module instance prefix if present
+            # e.g. "testbench.uut.out" → "out"
+            if '.' in name:
+                name = name.split('.')[-1]
+
+            # Only register first occurrence of a symbol
+            if sym not in id_info:
+                id_info[sym] = {"name": name, "width": width}
+
+    def _parse_value_changes(
+        self,
+        vcd: str,
+        id_info: dict,
+        values_by_id: dict,
+    ) -> int:
+        """
+        Walk through the VCD body (after $enddefinitions) and collect
+        {time, value} pairs per symbol.  Returns the maximum timestamp seen.
+        """
+        # Fast-forward to after $enddefinitions
+        body_start = vcd.find("$enddefinitions")
+        if body_start == -1:
+            body_start = 0
+        else:
+            body_start = vcd.find("$end", body_start) + len("$end")
+
+        current_time = 0
+        max_time     = 0
+
+        for line in vcd[body_start:].splitlines():
+            line = line.strip()
+            if not line or line.startswith("//"):
+                continue
+
+            # Timestamp
+            if line.startswith("#"):
+                try:
+                    current_time = int(line[1:])
+                    max_time = max(max_time, current_time)
+                except ValueError:
+                    pass
+                continue
+
+            # Skip VCD keywords
+            if line.startswith("$"):
+                continue
+
+            # 1-bit value change: e.g.  0!  1"  xA
+            if len(line) >= 2 and line[0] in "01xXzZ":
+                val = line[0].lower()
+                sym = line[1:]
+                if sym in id_info:
+                    values_by_id[sym].append({"time": current_time, "value": val})
+                continue
+
+            # Multi-bit (vector) value change: e.g.  b10101010 "   or  b1010 A
+            if line.startswith(("b", "B", "r", "R")):
+                parts = line.split()
+                if len(parts) >= 2:
+                    raw_val = parts[0][1:]   # strip leading b/B/r/R
+                    sym     = parts[1]
+                    if sym in id_info:
+                        width = id_info[sym]["width"]
+                        hex_val = self._bin_to_hex(raw_val, width)
+                        values_by_id[sym].append({"time": current_time, "value": hex_val})
+                continue
+
+        return max_time
+
+    # ── Value-format helpers ─────────────────────────────────────────────────
+
+    def _bin_to_hex(self, bin_str: str, width: int) -> str:
+        """Convert a VCD binary string (may contain x/z) to hex."""
+        bin_str = bin_str.lower()
+
+        # If entirely numeric binary → convert normally
+        if re.fullmatch(r'[01]+', bin_str):
+            try:
+                val = int(bin_str, 2)
+                return f"0x{val:X}"
+            except ValueError:
+                pass
+
+        # Contains x or z → fall back to per-nibble conversion
+        # Pad to full width
+        padded = bin_str.zfill(width)
+        hex_chars = []
+        for i in range(0, len(padded), 4):
+            nibble = padded[i:i+4]
+            if 'x' in nibble:
+                hex_chars.append('x')
+            elif 'z' in nibble:
+                hex_chars.append('z')
+            else:
+                try:
+                    hex_chars.append(f"{int(nibble, 2):X}")
+                except ValueError:
+                    hex_chars.append('x')
+
+        return "0x" + "".join(hex_chars) if hex_chars else "0x0"

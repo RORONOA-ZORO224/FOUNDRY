@@ -46,6 +46,10 @@ FOUNDRY is a full-stack AI-assisted Verilog development environment built with:
 - Generates line-by-line explanation of Verilog code.
 - Designed for ECE students.
 
+
+  ## 🔹 7.Circuit Viewer
+ - Generates circuit by users request and the verilog code
+ - It uses the same variables and component that the code contains
 ---
 
 FURTHER IMPLEMENTATION:

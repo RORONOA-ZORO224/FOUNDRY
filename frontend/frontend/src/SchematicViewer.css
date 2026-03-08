@@ -1,100 +1,186 @@
-.schematic-container {
-    background: var(--bg-secondary, #13131a);
-    border-radius: var(--radius-md, 12px);
-    padding: 1rem;
-    min-height: 600px;
-  }
-  
-  .schematic-legend {
-    display: flex;
-    gap: 1.5rem;
-    margin-bottom: 1rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-elevated, #22222e);
-    border-radius: var(--radius-sm, 6px);
-    flex-wrap: wrap;
-  }
-  
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--text-primary, #e5e7eb);
-    font-weight: 500;
-  }
-  
-  .legend-shape {
-    width: 24px;
-    height: 24px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    display: inline-block;
-  }
-  
-  .legend-shape.triangle {
-    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-  }
-  
-  .legend-shape.rect {
-    border-radius: 4px;
-  }
-  
-  .legend-shape.circle {
-    border-radius: 50%;
-  }
-  
-  .legend-shape.green {
-    background: #10b981;
-    border-color: #059669;
-  }
-  
-  .legend-shape.red {
-    background: #ef4444;
-    border-color: #dc2626;
-    transform: rotate(180deg);
-  }
-  
-  .legend-shape.purple {
-    background: #8b5cf6;
-    border-color: #7c3aed;
-  }
-  
-  .legend-shape.orange {
-    background: #f59e0b;
-    border-color: #d97706;
-  }
-  
-  .legend-shape.blue {
-    background: #3b82f6;
-    border-color: #2563eb;
-  }
-  
-  .schematic-canvas {
-    width: 100%;
-    height: 600px;
-    background: var(--bg-primary, #0a0a0f);
-    border-radius: var(--radius-md, 12px);
-    border: 1px solid var(--border-color, #2a2a38);
-  }
-  
-  .schematic-empty {
-    padding: 4rem 2rem;
-    text-align: center;
-    color: var(--text-muted, #6b7280);
-    background: var(--bg-secondary, #13131a);
-    border-radius: var(--radius-md, 12px);
-  }
-  
-  .schematic-empty p {
-    font-size: 1rem;
-    margin-bottom: 0.5rem;
-  }
-  
-  .empty-hint {
-    font-size: 0.875rem;
-    color: var(--text-secondary, #9ca3af);
-  }
-  
-  [data-theme='light'] .schematic-canvas {
-    background: white;
-  }
+/* ══════════════════════════════════════════════════════════════
+   SchematicViewer.css
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Root container ─────────────────────────────────────────── */
+.sv-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 520px;
+  background: #050810;
+  border-radius: 12px;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ── Tab bar ─────────────────────────────────────────────────── */
+.sv-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 8px 12px 0;
+  background: #080d18;
+  border-bottom: 1px solid #0f172a;
+  flex-shrink: 0;
+}
+
+.sv-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  color: #334155;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+  bottom: -1px;
+}
+
+.sv-tab:hover {
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sv-tab-active {
+  background: #050810;
+  border-color: #0f172a;
+  color: #e2e8f0;
+  border-bottom-color: #050810;
+}
+
+.sv-tab-icon {
+  font-size: 14px;
+}
+
+.sv-tab-badge {
+  background: rgba(124, 58, 237, 0.2);
+  color: #a78bfa;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  animation: badge-pulse 2s ease infinite;
+}
+
+.sv-tab-loading {
+  color: #f59e0b;
+  font-size: 11px;
+  animation: badge-pulse 0.8s ease infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.sv-tab-stats {
+  margin-left: auto;
+  padding-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.sv-stat {
+  color: #1e3a5f;
+  font-size: 10px;
+}
+
+/* ── Panel area ─────────────────────────────────────────────── */
+.sv-panel {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Topology wrap ──────────────────────────────────────────── */
+.sv-topology-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+}
+
+/* ── Schematic legend ───────────────────────────────────────── */
+.schematic-legend {
+  display: flex;
+  gap: 14px;
+  padding: 6px 14px;
+  background: #060a14;
+  border-bottom: 1px solid #0f172a;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: #334155;
+}
+
+.legend-shape {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+}
+
+.legend-shape.triangle.green {
+  background: #10b981;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+.legend-shape.triangle.red {
+  background: #ef4444;
+  clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+}
+.legend-shape.rect.purple {
+  background: #7c3aed;
+  border-radius: 2px;
+}
+.legend-shape.circle.orange {
+  background: #f59e0b;
+  border-radius: 50%;
+}
+.legend-shape.rect.blue {
+  background: #3b82f6;
+  border-radius: 2px;
+}
+.legend-shape.rect.cyan {
+  background: #06b6d4;
+  border-radius: 2px;
+}
+
+/* ── Cytoscape canvas ───────────────────────────────────────── */
+.schematic-canvas {
+  flex: 1;
+  min-height: 400px;
+  background: #050810;
+}
+
+/* ── Empty state ────────────────────────────────────────────── */
+.schematic-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 280px;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.empty-hint {
+  font-size: 11px;
+  color: #1e293b;
+}
